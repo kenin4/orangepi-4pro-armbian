@@ -122,17 +122,35 @@ fi
 echo "[OK] Found tun module: ${TUN_MODULE_PATH}"
 
 echo "[INFO] Verifying U-Boot signature in image (offset 8KB)..."
+UPSTREAM_SIG_FOUND=0
+VENDOR_BOOT0_SIG_FOUND=0
+VENDOR_FEX_NONZERO=0
+
 if [[ "${LATEST_IMG}" == *.xz ]]; then
-  if ! xzcat "${LATEST_IMG}" 2>/dev/null | dd bs=1024 skip=8 count=1024 status=none | strings | grep -qi 'u-boot'; then
-    echo "[ERROR] U-Boot signature not found in compressed image (${LATEST_IMG})"
-    exit 1
+  if xzcat "${LATEST_IMG}" 2>/dev/null | dd bs=1024 skip=8 count=1024 status=none | strings | grep -qi 'u-boot'; then
+    UPSTREAM_SIG_FOUND=1
   fi
+  if xzcat "${LATEST_IMG}" 2>/dev/null | dd bs=512 skip=256 count=128 status=none | strings | grep -Eqi 'egon|boot0|u-boot|sunxi'; then
+    VENDOR_BOOT0_SIG_FOUND=1
+  fi
+  VENDOR_FEX_NONZERO="$(xzcat "${LATEST_IMG}" 2>/dev/null | dd bs=512 skip=24576 count=128 status=none | tr -d '\000' | wc -c || true)"
 else
-  if ! dd if="${LATEST_IMG}" bs=1024 skip=8 count=1024 status=none 2>/dev/null | strings | grep -qi 'u-boot'; then
-    echo "[ERROR] U-Boot signature not found in image (${LATEST_IMG})"
-    exit 1
+  if dd if="${LATEST_IMG}" bs=1024 skip=8 count=1024 status=none 2>/dev/null | strings | grep -qi 'u-boot'; then
+    UPSTREAM_SIG_FOUND=1
   fi
+  if dd if="${LATEST_IMG}" bs=512 skip=256 count=128 status=none 2>/dev/null | strings | grep -Eqi 'egon|boot0|u-boot|sunxi'; then
+    VENDOR_BOOT0_SIG_FOUND=1
+  fi
+  VENDOR_FEX_NONZERO="$(dd if="${LATEST_IMG}" bs=512 skip=24576 count=128 status=none 2>/dev/null | tr -d '\000' | wc -c || true)"
 fi
-echo "[OK] U-Boot signature detected in image"
+
+if [[ ${UPSTREAM_SIG_FOUND} -eq 1 ]]; then
+  echo "[OK] U-Boot upstream signature detected in image"
+elif [[ ${VENDOR_BOOT0_SIG_FOUND} -eq 1 && ${VENDOR_FEX_NONZERO:-0} -gt 0 ]]; then
+  echo "[OK] Vendor bootloader blobs detected in image (boot0/fex offsets)"
+else
+  echo "[ERROR] Bootloader signature/blobs not detected in image (${LATEST_IMG})"
+  exit 1
+fi
 
 echo "[DONE] Build + artifact verification completed."
