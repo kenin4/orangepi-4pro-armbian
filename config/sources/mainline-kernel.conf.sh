@@ -5,7 +5,7 @@
 #
 
 
-BOOTBRANCH="tag:master"
+BOOTBRANCH="branch:master"
 
 
 # Shared versioning logic for Armbian mainline kernels.
