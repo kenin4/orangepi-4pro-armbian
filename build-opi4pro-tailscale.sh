@@ -15,6 +15,23 @@ INSTALL_DEPS="${INSTALL_DEPS:-1}"
 RELEASE="${RELEASE:-bookworm}"
 KERNEL_GIT="${KERNEL_GIT:-shallow}"
 
+IMAGE_OUTPUT_DIR="${ROOT_DIR}/output/images"
+if [[ -d "${IMAGE_OUTPUT_DIR}" ]]; then
+  shopt -s nullglob
+  EXISTING_IMAGES=(
+    "${IMAGE_OUTPUT_DIR}"/Armbian-unofficial_*_Orangepi-4pro_*.img
+    "${IMAGE_OUTPUT_DIR}"/Armbian-unofficial_*_Orangepi-4pro_*.img.xz
+    "${IMAGE_OUTPUT_DIR}"/Armbian-unofficial_*_Orangepi-4pro_*.img.sha
+    "${IMAGE_OUTPUT_DIR}"/Armbian-unofficial_*_Orangepi-4pro_*.img.txt
+  )
+  shopt -u nullglob
+
+  if (( ${#EXISTING_IMAGES[@]} > 0 )); then
+    echo "[INFO] Removing existing Orange Pi 4 Pro image artifacts..."
+    rm -f "${EXISTING_IMAGES[@]}"
+  fi
+fi
+
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "[ERROR] This script must run inside Linux (Ubuntu/Debian VM)."
   exit 1
@@ -123,6 +140,7 @@ echo "[OK] Found tun module: ${TUN_MODULE_PATH}"
 
 echo "[INFO] Verifying U-Boot signature in image (offset 8KB)..."
 UPSTREAM_SIG_FOUND=0
+VENDOR_EXACT_MATCH=0
 VENDOR_BOOT0_SIG_FOUND=0
 VENDOR_FEX_NONZERO=0
 
@@ -142,10 +160,34 @@ else
     VENDOR_BOOT0_SIG_FOUND=1
   fi
   VENDOR_FEX_NONZERO="$(dd if="${LATEST_IMG}" bs=512 skip=24576 count=128 status=none 2>/dev/null | tr -d '\000' | wc -c || true)"
+
+  # Deterministic vendor check: compare packaged boot blobs against image offsets.
+  LATEST_UBOOT_DEB="$(ls -1t "${ROOT_DIR}"/output/debs/linux-u-boot-orangepi-4pro-mainline_*.deb 2>/dev/null | head -n 1 || true)"
+  if [[ -n "${LATEST_UBOOT_DEB}" ]]; then
+    UBOOT_TMP_DIR="${TMP_DIR}/uboot"
+    mkdir -p "${UBOOT_TMP_DIR}"
+    dpkg-deb -x "${LATEST_UBOOT_DEB}" "${UBOOT_TMP_DIR}"
+
+    UBOOT_BLOB_DIR="$(find "${UBOOT_TMP_DIR}/usr/lib" -mindepth 1 -maxdepth 4 -type d \
+      -exec test -f '{}/boot0_sdcard.bin' \; \
+      -exec test -f '{}/boot_package.fex' \; -print -quit 2>/dev/null || true)"
+
+    if [[ -n "${UBOOT_BLOB_DIR}" ]]; then
+      BOOT0_SIZE="$(stat -c%s "${UBOOT_BLOB_DIR}/boot0_sdcard.bin")"
+      FEX_SIZE="$(stat -c%s "${UBOOT_BLOB_DIR}/boot_package.fex")"
+
+      if cmp -s <(dd if="${LATEST_IMG}" bs=1 skip=$((256*512)) count="${BOOT0_SIZE}" status=none 2>/dev/null) "${UBOOT_BLOB_DIR}/boot0_sdcard.bin" \
+        && cmp -s <(dd if="${LATEST_IMG}" bs=1 skip=$((24576*512)) count="${FEX_SIZE}" status=none 2>/dev/null) "${UBOOT_BLOB_DIR}/boot_package.fex"; then
+        VENDOR_EXACT_MATCH=1
+      fi
+    fi
+  fi
 fi
 
 if [[ ${UPSTREAM_SIG_FOUND} -eq 1 ]]; then
   echo "[OK] U-Boot upstream signature detected in image"
+elif [[ ${VENDOR_EXACT_MATCH} -eq 1 ]]; then
+  echo "[OK] Vendor bootloader blobs match image offsets (boot0/fex)"
 elif [[ ${VENDOR_BOOT0_SIG_FOUND} -eq 1 && ${VENDOR_FEX_NONZERO:-0} -gt 0 ]]; then
   echo "[OK] Vendor bootloader blobs detected in image (boot0/fex offsets)"
 else
