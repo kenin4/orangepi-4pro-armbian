@@ -32,7 +32,7 @@ if [[ "${INSTALL_DEPS}" == "1" ]]; then
     git curl wget ca-certificates xz-utils \
     build-essential bc bison flex \
     libssl-dev libelf-dev libncurses-dev \
-    python3 python3-pip rsync kmod cpio \
+    python3 python3-pip rsync kmod cpio jq \
     device-tree-compiler qemu-user-static binfmt-support \
     pv zip unzip dosfstools parted
 fi
