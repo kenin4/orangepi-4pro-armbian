@@ -84,8 +84,6 @@ chmod +x "${ROOT_DIR}/compile.sh"
   KERNEL_CONFIGURE=no \
   KERNEL_GIT="${KERNEL_GIT}" \
   RELEASE="${RELEASE}" \
-  BOOTSOURCE=https://github.com/u-boot/u-boot.git \
-  BOOTBRANCH=branch:master \
   SKIP_EXTERNAL_DRIVERS=yes \
   NO_HOST_RELEASE_CHECK=yes
 
