@@ -1,3 +1,2 @@
-verbosity=7
-console=both
-bootlogo=true
+verbosity=1
+bootlogo=false
