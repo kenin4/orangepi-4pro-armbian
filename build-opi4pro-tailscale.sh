@@ -79,7 +79,7 @@ cat /etc/os-release 2>/dev/null | grep -E "VERSION_CODENAME|VERSION_ID|PRETTY_NA
 chmod +x "${ROOT_DIR}/compile.sh"
 "${ROOT_DIR}/compile.sh" build \
   BOARD=orangepi-4pro \
-  BRANCH=mainline \
+  BRANCH=current \
   BUILD_MINIMAL=yes \
   KERNEL_CONFIGURE=no \
   KERNEL_GIT="${KERNEL_GIT}" \
